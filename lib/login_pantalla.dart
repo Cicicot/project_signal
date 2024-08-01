@@ -57,7 +57,7 @@ class LoginPantallaState extends State<LoginPantalla> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Lenguaje de Señas - BO', style: TextStyle(color: Colors.purple[800], fontWeight: FontWeight.w800),),
+        title: Text('Lenguaje de Señas - BO xd', style: TextStyle(color: Colors.purple[800], fontWeight: FontWeight.w800),),
         centerTitle: true,
       ),
       body: Center(
