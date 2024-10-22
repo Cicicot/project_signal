@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:crud_yt_basic/db_helper.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:crud_yt_basic/examen_pantalla.dart';
+import 'package:crud_yt_basic/login_pantalla.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ContenidoPantalla extends StatefulWidget {
   const ContenidoPantalla({super.key});
@@ -17,8 +19,8 @@ class _ContenidoPantallaState extends State<ContenidoPantalla> {
   List<Map<String, dynamic>> _allContenido = [];
   bool _isLoading = true;
 
-  VideoPlayerController? _videoController;
-  Uint8List? _videoData;
+  late VideoPlayerController _videoPlayerController;
+  Uint8List? _video;
 
   final _significadoController = TextEditingController();
 
@@ -33,39 +35,56 @@ class _ContenidoPantallaState extends State<ContenidoPantalla> {
   @override
   void initState() {
     super.initState();
+    _videoPlayerController = VideoPlayerController.networkUrl(
+      Uri.parse('https://www.sample-videos.com/video123/mp4/480/asdasdas.mp4')
+    );  
     _refreshContenido();
   }
 
   Future<void> _addContenido() async {
-    if (_videoData != null) {
+    if (_video != null && _significadoController.text.isNotEmpty) {
+      // Llama al método crearContenido de tu helper para agregar el nuevo contenido
       await SQLHelper.crearContenido(
-        _videoData!,
-        _significadoController.text,
+        _video!,  // El video en formato Uint8List
+        _significadoController.text,  // El texto del significado
       );
-      _refreshContenido();
+      _refreshContenido();  // Actualiza la lista de contenido después de agregarlo
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text('Contenido agregado correctamente'),
+        ),
+      );
     } else {
+      // Si no se ha seleccionado un video o el campo "significado" está vacío
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.redAccent,
-          content: Text('Por favor, selecciona un video'),
+          content: Text('Por favor, selecciona un video y añade un significado'),
         ),
       );
     }
   }
 
   Future<void> _updateContenido(int id) async {
-    if (_videoData != null) {
+    if (_video != null && _significadoController.text.isNotEmpty) {
       await SQLHelper.updateContenido(
-        id,
-        _videoData!,
-        _significadoController.text,
+        id,  // ID del contenido a actualizar
+        _video!,  // Video como Uint8List
+        _significadoController.text,  // Nuevo significado
       );
-      _refreshContenido();
+      _refreshContenido();  // Refresca la lista de contenido
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text('Contenido visualizado'),
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.redAccent,
-          content: Text('Por favor, selecciona un video'),
+          content: Text('Por favor, selecciona un video y añade un significado'),
         ),
       );
     }
@@ -73,51 +92,52 @@ class _ContenidoPantallaState extends State<ContenidoPantalla> {
 
   void _deleteContenido(int id) async {
     await SQLHelper.deleteContenido(id);
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         backgroundColor: Colors.redAccent,
-        content: Text('Contenido eliminado'),
+        content: Text('Contenido eliminado correctamente'),
       ),
     );
-    _refreshContenido();
+
+    _refreshContenido(); // Actualiza la lista de contenido
   }
 
-  Future<File?> _writeToFile(Uint8List? data) async {
-    if (data == null) return null;
-    final directory = await getTemporaryDirectory();
-    final file = File('${directory.path}/temp_video.mp4');
-    return file.writeAsBytes(data);
-  }
 
-  Future<void> _pickVideo() async {
+  Future<void> _initializeVideo(File videoFile) async {
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.video);
-      if (result != null && result.files.single.bytes != null) {
-        setState(() {
-          _videoData = result.files.single.bytes!;
-        });
-        final videoFile = await _writeToFile(_videoData);
-        if (videoFile != null) {
-          setState(() {
-            _videoController = VideoPlayerController.file(videoFile)
-              ..initialize().then((_) {
-                setState(() {});
-              });
-          });
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.redAccent,
-            content: Text('Error al seleccionar el video'),
-          ),
-        );
-      }
+      _videoPlayerController.dispose();
+      _videoPlayerController = VideoPlayerController.file(videoFile);
+      await _videoPlayerController.initialize();
+      setState(() {});
+      _videoPlayerController.setLooping(true);  // Permite repetición continua
+      _videoPlayerController.play();
     } catch (e) {
+      // print('Error durante la inicialización del video: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: Colors.redAccent,
-          content: Text('Error: $e'),
+          content: Text('Error al inicializar el video: $e'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickVideo(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      _video = await pickedFile.readAsBytes();
+      final videoFile = File(pickedFile.path);
+
+      // Inicia el reproductor de video
+      await _initializeVideo(videoFile);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.redAccent,
+          content: Text('No se seleccionó ningún video'),
         ),
       );
     }
@@ -125,23 +145,18 @@ class _ContenidoPantallaState extends State<ContenidoPantalla> {
 
   void showBottomSheet(int? id) async {
     if (id != null) {
-      final existingContenido =
-          _allContenido.firstWhere((element) => element['idContenido'] == id);
+      final existingContenido = _allContenido.firstWhere((element) => element['idContenido'] == id);
       _significadoController.text = existingContenido['significado'];
-      _videoData = existingContenido['video'];
-      final videoFile = await _writeToFile(_videoData);
-      setState(() {
-        if (videoFile != null) {
-          _videoController = VideoPlayerController.file(videoFile)
-            ..initialize().then((_) {
-              setState(() {});
-            });
-        }
-      });
+      _video = existingContenido['video'];
+      final videoFile = await _writeToFile(_video);
+
+      if (videoFile != null) {
+        await _initializeVideo(videoFile);
+      }
     } else {
       _significadoController.text = '';
-      _videoData = null;
-      _videoController = null;
+      _video = null;
+      _videoPlayerController.dispose();
     }
 
     showModalBottomSheet(
@@ -157,86 +172,56 @@ class _ContenidoPantallaState extends State<ContenidoPantalla> {
               right: 15,
               bottom: MediaQuery.of(context).viewInsets.bottom + 50,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      final result = await FilePicker.platform.pickFiles(type: FileType.video);
-                      if (result != null && result.files.single.bytes != null) {
-                        setModalState(() {
-                          _videoData = result.files.single.bytes!;
-                        });
-                        final videoFile = await _writeToFile(_videoData);
-                        if (videoFile != null) {
-                          setModalState(() {
-                            _videoController = VideoPlayerController.file(videoFile)
-                              ..initialize().then((_) {
-                                setModalState(() {});
-                              });
-                          });
-                        }
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            backgroundColor: Colors.redAccent,
-                            content: Text('Error al seleccionar el video'),
-                          ),
-                        );
-                      }
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: Colors.redAccent,
-                          content: Text('Error: $e'),
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('Seleccionar Video'),
-                ),
-                const SizedBox(height: 5),
-                _videoController != null && _videoController!.value.isInitialized
-                    ? AspectRatio(
-                        aspectRatio: _videoController!.value.aspectRatio,
-                        child: VideoPlayer(_videoController!),
+            child: SingleChildScrollView(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      onPressed: () async {
+                        await _pickVideo();
+                        setModalState(() {});
+                      },
+                      child: const Text('Seleccionar Video'),
+                    ),
+                    const SizedBox(height: 10),
+                    if (_videoPlayerController.value.isInitialized)
+                        SizedBox(
+                        width: 250, // Ancho específico del video
+                        height: 400, // Alto específico del video
+                        child: VideoPlayer(_videoPlayerController),
                       )
-                    : const Text('No hay video seleccionado'),
-                const SizedBox(height: 5),
-                TextField(
-                  controller: _significadoController,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    hintText: 'Significado del contenido',
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Center(
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      if (id == null) {
-                        await _addContenido();
-                      } else {
-                        await _updateContenido(id);
-                      }
-                      _significadoController.text = '';
-                      _videoData = null;
-                      _videoController = null;
-                      Navigator.of(context).pop();
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.all(18),
-                      child: Text(
-                        id == null ? 'Añadir Contenido' : 'Actualizar Contenido',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+                      // AspectRatio(
+                      //   aspectRatio: _videoPlayerController.value.aspectRatio,
+                      //   child: VideoPlayer(_videoPlayerController),
+                      // )
+                    else
+                      const Text('No hay video seleccionado'),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _significadoController,
+                      decoration: const InputDecoration(
+                        labelText: 'Significado',
+                        border: OutlineInputBorder(),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (id == null) {
+                          await _addContenido();
+                        } else {
+                          await _updateContenido(id);
+                        }
+                        Navigator.of(context).pop();
+                        _refreshContenido();
+                      },
+                      child: Text(id == null ? 'Agregar' : 'Aprendido'),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           );
         },
@@ -244,19 +229,84 @@ class _ContenidoPantallaState extends State<ContenidoPantalla> {
     );
   }
 
+  Future<File?> _writeToFile(Uint8List? data) async {
+    if (data == null) return null;
+    final directory = await getTemporaryDirectory();
+    final file = File('${directory.path}/temp_video.mp4');
+    return file.writeAsBytes(data);
+  }
+
   @override
   void dispose() {
-    _videoController?.dispose();
+    _videoPlayerController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 218, 191, 191),
+      backgroundColor: const Color.fromARGB(255, 226, 195, 195),
       appBar: AppBar(
         centerTitle: true,
         title: const Text('Contenido'),
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(
+                color: Colors.deepPurple
+              ),
+              child: Column(
+                children: [
+                  Text('Tareas' )
+                ],
+              )
+            ),
+            Column(
+              children: [
+                ListTile(
+                  title: const  Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      Icon( Icons.account_balance ),
+                      Text('Resolver Examen'),
+                    ],
+                  ),
+                  onTap: () {
+                      if (_allContenido.isNotEmpty) {
+                      Navigator.push(context, MaterialPageRoute(
+                        builder: (context) => ExamenPantalla(contenido: _allContenido), // Pasa toda la lista
+                      ));
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          backgroundColor: Colors.redAccent,
+                          content: Text('No hay contenido disponible para el examen'),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                ListTile(
+                  title: const Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      Icon( Icons.logout ),
+                      Text('Cerrar sesión'),
+                    ],
+                  ),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (context) => const LoginPantalla(),
+                    ));
+                  },
+                ),
+              ],
+            )
+          ],
+        ),
       ),
       body: _isLoading
           ? const Center(
@@ -278,7 +328,7 @@ class _ContenidoPantallaState extends State<ContenidoPantalla> {
                         onPressed: () {
                           showBottomSheet(_allContenido[index]['idContenido']);
                         },
-                        icon: const Icon(Icons.edit, color: Colors.indigo),
+                        icon: const Icon(Icons.remove_red_eye_outlined, color: Colors.indigo),
                       ),
                       IconButton(
                         onPressed: () {

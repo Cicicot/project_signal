@@ -2,6 +2,7 @@ import 'package:crud_yt_basic/db_helper.dart';
 import 'package:crud_yt_basic/nivel_pantalla.dart';
 import 'package:crud_yt_basic/registrarse_pantalla.dart';
 import 'package:flutter/material.dart';
+import 'package:crud_yt_basic/globals.dart' as globals;
 
 
 class LoginPantalla extends StatefulWidget {
@@ -26,6 +27,7 @@ class LoginPantallaState extends State<LoginPantalla> {
 
     if (response['success']) {
       String tipo = response['tipo'];
+      globals.globalUsername = _usernameController.text;
       
       switch (tipo) {
         case 'administrador':

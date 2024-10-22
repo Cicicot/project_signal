@@ -3,6 +3,9 @@ import 'package:crud_yt_basic/leccion_pantalla.dart';
 import 'package:flutter/material.dart';
 
 class NivelPantalla extends StatefulWidget {
+
+  
+
   const NivelPantalla({super.key});
 
   @override

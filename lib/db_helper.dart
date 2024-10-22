@@ -60,6 +60,14 @@ class SQLHelper{
       )""");
   }
 
+  static Future<void> createTableExamen(sql.Database database) async {
+    await database.execute("""CREATE TABLE examen (
+      idExamen INTEGER PRIMARY KEY AUTOINCREMENT, 
+      video BLOB, 
+      significado TEXT
+    )""");
+  }
+
   static Future<sql.Database> db() async{
     return sql.openDatabase(
       "database_lsb.db",
@@ -70,6 +78,7 @@ class SQLHelper{
         await createTableUsuario(database);
         await createTableLeccion(database);
         await createTableContenido(database);
+        await createTableExamen(database);
       }
     );
   }
@@ -135,6 +144,15 @@ class SQLHelper{
     return idContenido;
   }
 
+  static Future<int> crearExamen(Uint8List video) async {
+    final db = await SQLHelper.db();
+    final examen = {
+      'video': video,
+    };
+    final idExamen = await db.insert('examen', examen, conflictAlgorithm: sql.ConflictAlgorithm.replace);
+    return idExamen;
+  }
+
   //READ 
   static Future<List<Map<String, dynamic>>> getAllData() async{
     final db = await SQLHelper.db();
@@ -161,6 +179,11 @@ class SQLHelper{
     return db.query('contenido', orderBy: 'idContenido');
   }
 
+  static Future<List<Map<String, dynamic>>> getAllExamenes() async {
+    final db = await SQLHelper.db();
+    return db.query('examen', orderBy: 'idExamen');
+  }
+
   static Future<List<Map<String, dynamic>>> getSingleData(int id) async{
     final db = await SQLHelper.db();
     return db.query('data', where: "id=?", whereArgs: [id], limit: 1);
@@ -184,6 +207,11 @@ class SQLHelper{
   static Future<List<Map<String, dynamic>>> getSingleContenido(int id) async {
     final db = await SQLHelper.db();
     return db.query('contenido', where: 'idContenido=?', whereArgs: [id], limit: 1);
+  }
+
+  static Future<List<Map<String, dynamic>>> getSingleExamen(int id) async {
+    final db = await SQLHelper.db();
+    return db.query('examen', where: 'idExamen=?', whereArgs: [id], limit: 1);
   }
 
   //UPDATE
@@ -288,6 +316,15 @@ class SQLHelper{
       await db.delete('contenido', where: "idContenido=?", whereArgs: [id]);
     } catch (e) {
       throw Exception('No se pudo eliminar el contenido');
+    }
+  }
+
+  static Future<void> deleteExamen(int id) async {
+    final db = await SQLHelper.db();
+    try {
+      await db.delete('examen', where: "idExamen=?", whereArgs: [id]);
+    } catch (e) {
+      throw Exception('No se pudo eliminar el Examen');
     }
   }
 
